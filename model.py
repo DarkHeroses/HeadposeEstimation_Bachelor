@@ -9,6 +9,7 @@ import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.INFO)
 directory = 'kinect_head_pose_db/hpdb/'
+cropped_directory = 'kinect_head_pose_db/cropped_rgb/'
 
 
 def get_predict_data():
@@ -22,7 +23,7 @@ def get_predict_data():
 def _parse_function(filename, label):
     image_string = tf.read_file(filename)
     image_decoded = tf.image.decode_png(image_string)
-    image_resized = tf.image.resize_images(image_decoded, [64, 64])
+    image_resized = tf.image.resize_images(image_decoded, [64, 64])  # tf.cast(image_decoded, dtype=tf.float64)
     return image_resized, label
 
 
@@ -31,9 +32,11 @@ def get_datasets_train():
     filenames = []
     labels = []
     folder_counter = sum([len(d) for r, d, folder in os.walk(directory)])
-    for i in range(1, folder_counter - 4):
+    for i in range(1, folder_counter - 22):
         print("i" + str(i))
         subdirect = directory + '{:02}'.format(i) + "/"
+        cropped_subdirect = cropped_directory + '{:02}'.format(i) + "/"
+
         try:
             for filename in os.listdir(subdirect):
                 if filename.endswith("_pose.txt"):
@@ -42,7 +45,7 @@ def get_datasets_train():
                             axis=1).values, [-1]))
                     continue
                 if filename.endswith(".png"):
-                    filenames.append(os.path.join(subdirect, filename))
+                    filenames.append(os.path.join(cropped_subdirect, filename))
                     continue
                 if filename.endswith("_depth.bin"):
                     pass
@@ -61,7 +64,10 @@ def get_datasets_train():
     dataset = dataset.apply(tf.contrib.data.map_and_batch(map_func=_parse_function, batch_size=batch_size))
 
     dataset = dataset.repeat()
-    return dataset
+    iterator = dataset.make_one_shot_iterator()
+
+    features, labels = iterator.get_next()
+    return features, labels
 
 
 def get_datasets_test():
@@ -236,7 +242,7 @@ def main(unused):
         )
 
         print("Evaluate the Model")
-        eval_results = head_pose_classifier.evaluate(input_fn=get_datasets_eval)
+        eval_results = head_pose_classifier.evaluate(input_fn=get_datasets_test)
         print(eval_results)
         winsound.Beep(1500, 25)
     if len(sys.argv) == 2 and sys.argv[1].endswith(".png"):
